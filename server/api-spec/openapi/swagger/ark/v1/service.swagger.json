@@ -411,6 +411,17 @@
         "unilateralExitDelay": {
           "type": "string",
           "format": "int64"
+        },
+        "roundInterval": {
+          "type": "string",
+          "format": "int64"
+        },
+        "network": {
+          "type": "string"
+        },
+        "minRelayFee": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -677,6 +688,10 @@
         },
         "spentBy": {
           "type": "string"
+        },
+        "expireAt": {
+          "type": "string",
+          "format": "int64"
         }
       }
     }

@@ -10,8 +10,8 @@ import (
 )
 
 var expiryDetailsFlag = cli.BoolFlag{
-	Name:     "expiry-details",
-	Usage:    "show cumulative balance by expiry time",
+	Name:     "compute-expiry-details",
+	Usage:    "compute client-side the VTXOs expiry time",
 	Value:    false,
 	Required: false,
 }
@@ -24,22 +24,22 @@ var balanceCommand = cli.Command{
 }
 
 func balanceAction(ctx *cli.Context) error {
-	withExpiryDetails := ctx.Bool("expiry-details")
+	computeExpiryDetails := ctx.Bool(expiryDetailsFlag.Name)
 
-	client, cancel, err := getClientFromState()
+	client, cancel, err := getClientFromState(ctx)
 	if err != nil {
 		return err
 	}
 	defer cancel()
 
-	offchainAddr, onchainAddr, redemptionAddr, err := getAddress()
+	offchainAddr, onchainAddr, redemptionAddr, err := getAddress(ctx)
 	if err != nil {
 		return err
 	}
-	_, network := getNetwork()
+	_, network := getNetwork(ctx)
 	// No need to check for error here becuase this function is called also by getAddress().
 	// nolint:all
-	unilateralExitDelay, _ := getUnilateralExitDelay()
+	unilateralExitDelay, _ := getUnilateralExitDelay(ctx)
 
 	wg := &sync.WaitGroup{}
 	wg.Add(3)
@@ -47,9 +47,9 @@ func balanceAction(ctx *cli.Context) error {
 	chRes := make(chan balanceRes, 3)
 	go func() {
 		defer wg.Done()
-		explorer := NewExplorer()
+		explorer := NewExplorer(ctx)
 		balance, amountByExpiration, err := getOffchainBalance(
-			ctx.Context, explorer, client, offchainAddr, withExpiryDetails,
+			ctx, explorer, client, offchainAddr, computeExpiryDetails,
 		)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
@@ -61,7 +61,7 @@ func balanceAction(ctx *cli.Context) error {
 
 	go func() {
 		defer wg.Done()
-		explorer := NewExplorer()
+		explorer := NewExplorer(ctx)
 		balance, err := explorer.GetBalance(onchainAddr, network.AssetID)
 		if err != nil {
 			chRes <- balanceRes{0, 0, nil, nil, err}
@@ -72,7 +72,7 @@ func balanceAction(ctx *cli.Context) error {
 
 	go func() {
 		defer wg.Done()
-		explorer := NewExplorer()
+		explorer := NewExplorer(ctx)
 
 		spendableBalance, lockedBalance, err := explorer.GetRedeemedVtxosBalance(
 			redemptionAddr, unilateralExitDelay,
@@ -176,9 +176,7 @@ func balanceAction(ctx *cli.Context) error {
 		offchainBalanceJSON["next_expiration"] = fancyTimeExpiration
 	}
 
-	if withExpiryDetails {
-		offchainBalanceJSON["details"] = details
-	}
+	offchainBalanceJSON["details"] = details
 
 	response["offchain_balance"] = offchainBalanceJSON
 

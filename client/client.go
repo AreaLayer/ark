@@ -1,12 +1,12 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/urfave/cli/v2"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,10 +21,10 @@ type vtxo struct {
 }
 
 func getVtxos(
-	ctx context.Context, explorer Explorer, client arkv1.ArkServiceClient,
-	addr string, withExpiration bool,
+	ctx *cli.Context, explorer Explorer, client arkv1.ArkServiceClient,
+	addr string, computeExpiration bool,
 ) ([]vtxo, error) {
-	response, err := client.ListVtxos(ctx, &arkv1.ListVtxosRequest{
+	response, err := client.ListVtxos(ctx.Context, &arkv1.ListVtxosRequest{
 		Address: addr,
 	})
 	if err != nil {
@@ -33,25 +33,31 @@ func getVtxos(
 
 	vtxos := make([]vtxo, 0, len(response.GetSpendableVtxos()))
 	for _, v := range response.GetSpendableVtxos() {
+		var expireAt *time.Time
+		if v.ExpireAt > 0 {
+			t := time.Unix(v.ExpireAt, 0)
+			expireAt = &t
+		}
 		vtxos = append(vtxos, vtxo{
 			amount:   v.Receiver.Amount,
 			txid:     v.Outpoint.Txid,
 			vout:     v.Outpoint.Vout,
 			poolTxid: v.PoolTxid,
+			expireAt: expireAt,
 		})
 	}
 
-	if !withExpiration {
+	if !computeExpiration {
 		return vtxos, nil
 	}
 
-	redeemBranches, err := getRedeemBranches(ctx, explorer, client, vtxos)
+	redeemBranches, err := getRedeemBranches(ctx.Context, explorer, client, vtxos)
 	if err != nil {
 		return nil, err
 	}
 
 	for vtxoTxid, branch := range redeemBranches {
-		expiration, err := branch.expireAt()
+		expiration, err := branch.expireAt(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -67,8 +73,8 @@ func getVtxos(
 	return vtxos, nil
 }
 
-func getClientFromState() (arkv1.ArkServiceClient, func(), error) {
-	state, err := getState()
+func getClientFromState(ctx *cli.Context) (arkv1.ArkServiceClient, func(), error) {
+	state, err := getState(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
