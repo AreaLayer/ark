@@ -74,7 +74,7 @@ Inside the `arkd` container is shipped the `ark` CLI. You can submit payment to 
 
 ```bash
 alias ark='docker exec arkd ark'
-ark init --password <password> --ark-url localhost:6000
+ark init --network testnet --password <password> --ark-url localhost:6000
 ```
 
 This will add a `state.json` file to the following directory:
